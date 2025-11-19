@@ -545,9 +545,9 @@ class ChatInterface(QMainWindow):
         layout.setSpacing(15)
         
         # Área de mensagens
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setStyleSheet("""
+        self.scrollArea = QScrollArea()
+        self.scrollArea.setWidgetResizable(True)
+        self.scrollArea.setStyleSheet("""
             QScrollArea {
                 background: transparent;
                 border: none;
@@ -569,8 +569,8 @@ class ChatInterface(QMainWindow):
         self.messagesLayout.setSpacing(12)
         self.messagesLayout.addStretch()
         
-        scroll.setWidget(self.messagesWidget)
-        layout.addWidget(scroll, 1)
+        self.scrollArea.setWidget(self.messagesWidget)
+        layout.addWidget(self.scrollArea, 1)
         
         # Área de input
         input_container = QWidget()
@@ -695,6 +695,8 @@ class ChatInterface(QMainWindow):
     
     def addMessage(self, text, is_user=True):
         """Adiciona mensagem ao chat"""
+        print(f"➕ addMessage chamado: '{text[:50]}...' (user={is_user})")  # DEBUG
+        
         bubble = MessageBubble(text, is_user)
         
         # Container para alinhamento
@@ -710,21 +712,23 @@ class ChatInterface(QMainWindow):
             container_layout.addStretch()
         
         # Remove stretch temporário
-        item = self.messagesLayout.takeAt(self.messagesLayout.count() - 1)
+        count = self.messagesLayout.count()
+        if count > 0:
+            item = self.messagesLayout.takeAt(count - 1)
         
         self.messagesLayout.addWidget(container)
         self.messagesLayout.addStretch()
+        
+        print(f"📊 Total de mensagens no layout: {self.messagesLayout.count()}")  # DEBUG
         
         # Scroll para baixo
         QTimer.singleShot(100, lambda: self.scrollToBottom())
     
     def scrollToBottom(self):
         """Scroll automático para última mensagem"""
-        scroll_area = self.messagesWidget.parent()
-        if hasattr(scroll_area, 'verticalScrollBar'):
-            scroll_area.verticalScrollBar().setValue(
-                scroll_area.verticalScrollBar().maximum()
-            )
+        if hasattr(self, 'scrollArea'):
+            scrollbar = self.scrollArea.verticalScrollBar()
+            scrollbar.setValue(scrollbar.maximum())
     
     def sendMessage(self):
         """Envia mensagem"""
@@ -732,12 +736,17 @@ class ChatInterface(QMainWindow):
         if not text:
             return
         
+        print(f"📤 Enviando: {text}")  # DEBUG
+        
         # Adicionar mensagem do usuário
         self.addMessage(text, is_user=True)
         self.inputField.clear()
         
+        print(f"✅ Mensagem adicionada ao chat")  # DEBUG
+        
         # Verificar se IA está configurada
         if not self.ai_engine:
+            print("❌ IA não configurada")  # DEBUG
             self.addMessage(
                 "❌ Engine da IA não está configurado.\n\n"
                 "Configure sua API Key do Gemini em:\n"
@@ -745,6 +754,8 @@ class ChatInterface(QMainWindow):
                 is_user=False
             )
             return
+        
+        print("🤖 Processando com IA...")  # DEBUG
         
         # Atualizar status
         self.setStatus("thinking", "Pensando...")
