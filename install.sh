@@ -96,18 +96,24 @@ install_system_packages() {
     
     apt update -qq
     
+    # Instalar bibliotecas Qt e X11 necessárias
     DEBIAN_FRONTEND=noninteractive apt install -y \
         python3 \
         python3-pip \
         python3-venv \
-        qt6-base-dev \
-        libqt6svg6 \
-        libqt6widgets6 \
-        python3-pyqt6 \
-        python3-pyqt6.qtsvg \
         libxcb-xinerama0 \
         libxcb-cursor0 \
+        libxcb-icccm4 \
+        libxcb-image0 \
+        libxcb-keysyms1 \
+        libxcb-randr0 \
+        libxcb-render-util0 \
+        libxcb-shape0 \
         libxkbcommon-x11-0 \
+        libxcb1 \
+        libx11-xcb1 \
+        libgl1-mesa-glx \
+        libdbus-1-3 \
         x11-apps \
         dbus-x11 \
         procps \
@@ -163,7 +169,7 @@ setup_python_env() {
     # Atualizar pip
     pip install --upgrade pip > /dev/null 2>&1
     
-    # Instalar pacotes
+    # Instalar pacotes Python (PyQt6 via pip já que Ubuntu 22.04 não tem no apt)
     pip install \
         PyQt6 \
         PyQt6-Qt6 \
