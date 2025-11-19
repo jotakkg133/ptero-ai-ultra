@@ -79,7 +79,11 @@ class MessageBubble(QFrame):
         self.label.setWordWrap(True)
         self.label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         self.label.setMinimumWidth(100)
-        self.label.setMaximumWidth(600)
+        self.label.setMaximumWidth(500)
+        
+        # Definir tamanho do frame também
+        self.setMinimumWidth(120)
+        self.setMaximumWidth(550)
         
         # Estilo baseado em quem enviou
         if self.is_user:

@@ -1143,8 +1143,8 @@ class PteroAIUltraPro:
     def chat(self, user_message: str) -> str:
         """Modo chat simples sem confirmações (para interface gráfica)"""
         try:
-            # Analisar com IA sem contexto pesado
-            response = self.ai.model.generate_content(
+            # Usar o main_model para responder
+            response = self.ai.main_model.generate_content(
                 f"Você é PTERO-AI Ultra Pro, um assistente especializado em Pterodactyl Panel.\n\n"
                 f"Usuário: {user_message}\n\n"
                 f"Responda de forma útil e amigável. Se for sobre Pterodactyl, seja específico. "
