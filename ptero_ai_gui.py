@@ -380,6 +380,9 @@ class AIWorker(QThread):
     
     def run(self):
         try:
+            print(f"🔍 Atributos do ai_engine: {dir(self.ai_engine)}")  # DEBUG
+            print(f"🔍 Verificando process_request: {hasattr(self.ai_engine, 'process_request')}")  # DEBUG
+            
             # Capturar output da IA
             import io
             from contextlib import redirect_stdout, redirect_stderr
@@ -396,6 +399,9 @@ class AIWorker(QThread):
             
             self.responseReady.emit(result)
         except Exception as e:
+            import traceback
+            error_detail = traceback.format_exc()
+            print(f"❌ Erro completo:\n{error_detail}")
             self.responseReady.emit(f"❌ Erro: {str(e)}")
 
 
@@ -425,10 +431,9 @@ class ChatInterface(QMainWindow):
                 
                 if api_key and PteroAIUltraPro:
                     try:
-                        # Inicializar engine e analisar sistema
+                        # Inicializar engine
                         self.ai_engine = PteroAIUltraPro(api_key, "ptero_ai_ultra_config.json")
-                        self.ai_engine.analyze_system()
-                        print("✅ Engine da IA inicializado e sistema analisado")
+                        print("✅ Engine da IA inicializado")
                     except Exception as e:
                         print(f"❌ Erro ao inicializar IA: {e}")
                         import traceback
