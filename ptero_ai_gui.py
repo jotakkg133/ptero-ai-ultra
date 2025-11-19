@@ -66,17 +66,20 @@ class MessageBubble(QFrame):
     def __init__(self, text, is_user=True, parent=None):
         super().__init__(parent)
         self.is_user = is_user
-        self.setText(text)
+        self._text = text
         self.setupUI()
     
     def setupUI(self):
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(15, 10, 15, 10)
+        layout.setContentsMargins(15, 12, 15, 12)
+        layout.setSpacing(0)
         
         # Label do texto
-        self.label = QLabel(self.text())
+        self.label = QLabel(self._text)
         self.label.setWordWrap(True)
         self.label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        self.label.setMinimumWidth(100)
+        self.label.setMaximumWidth(600)
         
         # Estilo baseado em quem enviou
         if self.is_user:
@@ -91,12 +94,16 @@ class MessageBubble(QFrame):
                 }
             """)
             self.label.setStyleSheet("""
-                color: #1e1e2e;
-                font-size: 14px;
-                font-weight: 500;
+                QLabel {
+                    color: #1e1e2e;
+                    font-size: 14px;
+                    font-weight: 500;
+                    background: transparent;
+                    border: none;
+                }
             """)
         else:
-            # IA - cinza escuro
+            # IA - cinza escuro com ícone
             self.setStyleSheet("""
                 QFrame {
                     background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
@@ -107,9 +114,13 @@ class MessageBubble(QFrame):
                 }
             """)
             self.label.setStyleSheet("""
-                color: #cdd6f4;
-                font-size: 14px;
-                font-weight: 400;
+                QLabel {
+                    color: #cdd6f4;
+                    font-size: 14px;
+                    font-weight: 400;
+                    background: transparent;
+                    border: none;
+                }
             """)
         
         # Sombra
@@ -121,26 +132,26 @@ class MessageBubble(QFrame):
         
         layout.addWidget(self.label)
         
-        # Animação de entrada
-        self.animateEntry()
+        # Definir tamanho mínimo antes de animar
+        self.adjustSize()
+        
+        # Animação de entrada com opacidade
+        self.setWindowOpacity(0)
+        self.opacity_animation = QPropertyAnimation(self, b"windowOpacity")
+        self.opacity_animation.setDuration(300)
+        self.opacity_animation.setStartValue(0.0)
+        self.opacity_animation.setEndValue(1.0)
+        self.opacity_animation.setEasingCurve(QEasingCurve.Type.OutCubic)
+        QTimer.singleShot(50, self.opacity_animation.start)
     
     def setText(self, text):
         self._text = text
         if hasattr(self, 'label'):
             self.label.setText(text)
+            self.adjustSize()
     
     def text(self):
         return self._text
-    
-    def animateEntry(self):
-        """Animação suave de entrada"""
-        self.setMaximumHeight(0)
-        animation = QPropertyAnimation(self, b"maximumHeight")
-        animation.setDuration(300)
-        animation.setStartValue(0)
-        animation.setEndValue(1000)
-        animation.setEasingCurve(QEasingCurve.Type.OutCubic)
-        animation.start()
 
 
 class AnimatedLogo(QWidget):
@@ -702,12 +713,18 @@ class ChatInterface(QMainWindow):
     
     def addMessage(self, text, is_user=True):
         """Adiciona mensagem ao chat"""
+        print(f"[DEBUG] addMessage: text={text[:50]}..., is_user={is_user}")
+        
         bubble = MessageBubble(text, is_user)
+        bubble.setVisible(True)  # Forçar visibilidade
+        
+        print(f"[DEBUG] Bubble created: size={bubble.size()}, visible={bubble.isVisible()}")
         
         # Container para alinhamento
         container = QWidget()
+        container.setVisible(True)
         container_layout = QHBoxLayout(container)
-        container_layout.setContentsMargins(0, 0, 0, 0)
+        container_layout.setContentsMargins(0, 5, 0, 5)
         
         if is_user:
             container_layout.addStretch()
@@ -723,6 +740,12 @@ class ChatInterface(QMainWindow):
         
         self.messagesLayout.addWidget(container)
         self.messagesLayout.addStretch()
+        
+        print(f"[DEBUG] Container added. Total widgets: {self.messagesLayout.count()}")
+        
+        # Forçar update
+        self.messagesWidget.updateGeometry()
+        self.scrollArea.updateGeometry()
         
         # Scroll para baixo
         QTimer.singleShot(100, lambda: self.scrollToBottom())
@@ -753,16 +776,55 @@ class ChatInterface(QMainWindow):
             )
             return
         
-        # Atualizar status
+        # Atualizar status e adicionar indicador "digitando..."
         self.setStatus("thinking", "Pensando...")
+        self.showTypingIndicator()
         
         # Processar com IA em thread separada
         self.current_worker = AIWorker(self.ai_engine, text)
         self.current_worker.responseReady.connect(self.onAIResponse)
         self.current_worker.start()
     
+    def showTypingIndicator(self):
+        """Mostra indicador de 'digitando...'"""
+        typing_label = QLabel("🤖 Digitando...")
+        typing_label.setStyleSheet("""
+            QLabel {
+                color: #a6adc8;
+                font-size: 13px;
+                font-style: italic;
+                padding: 10px 20px;
+                background: transparent;
+            }
+        """)
+        
+        # Container
+        self.typing_container = QWidget()
+        layout = QHBoxLayout(self.typing_container)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(typing_label)
+        layout.addStretch()
+        
+        # Remover stretch e adicionar
+        count = self.messagesLayout.count()
+        if count > 0:
+            self.messagesLayout.takeAt(count - 1)
+        
+        self.messagesLayout.addWidget(self.typing_container)
+        self.messagesLayout.addStretch()
+        
+        QTimer.singleShot(100, self.scrollToBottom)
+    
+    def hideTypingIndicator(self):
+        """Remove indicador de 'digitando...'"""
+        if hasattr(self, 'typing_container') and self.typing_container:
+            self.messagesLayout.removeWidget(self.typing_container)
+            self.typing_container.deleteLater()
+            self.typing_container = None
+    
     def onAIResponse(self, response):
         """Callback quando IA responde"""
+        self.hideTypingIndicator()
         self.addMessage(response, is_user=False)
         self.setStatus("idle", "Pronto")
         self.current_worker = None
