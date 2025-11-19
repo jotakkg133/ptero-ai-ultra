@@ -573,7 +573,13 @@ Responda em JSON:
 """
         
         try:
-            response = self.model.generate_content(prompt)
+            response = self.model.generate_content(
+                prompt,
+                generation_config={
+                    'temperature': 0.1,
+                    'max_output_tokens': 4096
+                }
+            )
             text = response.text
             
             # Extrair JSON
