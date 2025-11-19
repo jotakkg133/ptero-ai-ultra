@@ -604,7 +604,7 @@ class SmartAIEngine:
         
         # Modelo principal (raciocínio)
         self.main_model = genai.GenerativeModel(
-            'gemini-1.5-pro',
+            'gemini-pro',
             generation_config={
                 'temperature': 0.2,
                 'top_p': 0.8,
@@ -615,7 +615,7 @@ class SmartAIEngine:
         
         # Modelo de validação (crítico)
         self.validator_model = genai.GenerativeModel(
-            'gemini-1.5-pro',
+            'gemini-pro',
             generation_config={
                 'temperature': 0.1,  # Muito conservador
                 'top_p': 0.7,
