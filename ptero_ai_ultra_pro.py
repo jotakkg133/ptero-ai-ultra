@@ -1134,8 +1134,11 @@ class PteroAIUltraPro:
     def chat(self, user_message: str) -> str:
         """Modo chat simples sem confirmações (para interface gráfica)"""
         try:
-            # Usar o main_model para responder
-            response = self.ai.main_model.generate_content(
+            # Usar GenerativeModel diretamente com modelo simples
+            import google.generativeai as genai
+            
+            model = genai.GenerativeModel('gemini-pro')
+            response = model.generate_content(
                 f"Você é PTERO-AI Ultra Pro, um assistente especializado em Pterodactyl Panel.\n\n"
                 f"Usuário: {user_message}\n\n"
                 f"Responda de forma útil e amigável. Se for sobre Pterodactyl, seja específico. "
@@ -1144,7 +1147,13 @@ class PteroAIUltraPro:
             
             return response.text
         except Exception as e:
-            return f"❌ Erro ao processar: {str(e)}"
+            # Se gemini-pro falhar, tentar listar modelos disponíveis
+            try:
+                import google.generativeai as genai
+                available_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
+                return f"❌ Erro: {str(e)}\n\nModelos disponíveis: {', '.join(available_models[:5])}"
+            except:
+                return f"❌ Erro ao processar: {str(e)}"
     
     def _simulate_execution(self, decision: AIDecision):
         """Simula execução sem aplicar mudanças"""
