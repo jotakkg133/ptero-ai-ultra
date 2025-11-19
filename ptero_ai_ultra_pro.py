@@ -603,25 +603,10 @@ class SmartAIEngine:
         genai.configure(api_key=api_key)
         
         # Modelo principal (raciocínio)
-        self.main_model = genai.GenerativeModel(
-            'gemini-pro',
-            generation_config={
-                'temperature': 0.2,
-                'top_p': 0.8,
-                'top_k': 40,
-                'max_output_tokens': 8192
-            }
-        )
+        self.main_model = genai.GenerativeModel('gemini-1.5-flash')
         
         # Modelo de validação (crítico)
-        self.validator_model = genai.GenerativeModel(
-            'gemini-pro',
-            generation_config={
-                'temperature': 0.1,  # Muito conservador
-                'top_p': 0.7,
-                'top_k': 20
-            }
-        )
+        self.validator_model = genai.GenerativeModel('gemini-1.5-flash')
         
         self.cache = context_cache
         self.validator = AIValidator(self.validator_model)
