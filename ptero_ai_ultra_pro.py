@@ -1140,6 +1140,21 @@ class PteroAIUltraPro:
         # Aqui implementaria a execução real
         print("✓ Operação completada\n")
     
+    def chat(self, user_message: str) -> str:
+        """Modo chat simples sem confirmações (para interface gráfica)"""
+        try:
+            # Analisar com IA sem contexto pesado
+            response = self.ai.model.generate_content(
+                f"Você é PTERO-AI Ultra Pro, um assistente especializado em Pterodactyl Panel.\n\n"
+                f"Usuário: {user_message}\n\n"
+                f"Responda de forma útil e amigável. Se for sobre Pterodactyl, seja específico. "
+                f"Se for uma saudação, seja breve e pergunte como pode ajudar."
+            )
+            
+            return response.text
+        except Exception as e:
+            return f"❌ Erro ao processar: {str(e)}"
+    
     def _simulate_execution(self, decision: AIDecision):
         """Simula execução sem aplicar mudanças"""
         print("\n🧪 SIMULAÇÃO DE EXECUÇÃO:\n")

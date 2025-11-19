@@ -380,23 +380,8 @@ class AIWorker(QThread):
     
     def run(self):
         try:
-            print(f"🔍 Atributos do ai_engine: {dir(self.ai_engine)}")  # DEBUG
-            print(f"🔍 Verificando process_request: {hasattr(self.ai_engine, 'process_request')}")  # DEBUG
-            
-            # Capturar output da IA
-            import io
-            from contextlib import redirect_stdout, redirect_stderr
-            
-            output = io.StringIO()
-            with redirect_stdout(output), redirect_stderr(output):
-                self.ai_engine.process_request(self.message)
-            
-            result = output.getvalue()
-            
-            # Se não teve output, retornar mensagem padrão
-            if not result.strip():
-                result = "✅ Processado com sucesso!"
-            
+            # Usar método chat ao invés de process_request
+            result = self.ai_engine.chat(self.message)
             self.responseReady.emit(result)
         except Exception as e:
             import traceback
@@ -717,8 +702,6 @@ class ChatInterface(QMainWindow):
     
     def addMessage(self, text, is_user=True):
         """Adiciona mensagem ao chat"""
-        print(f"➕ addMessage chamado: '{text[:50]}...' (user={is_user})")  # DEBUG
-        
         bubble = MessageBubble(text, is_user)
         
         # Container para alinhamento
@@ -741,8 +724,6 @@ class ChatInterface(QMainWindow):
         self.messagesLayout.addWidget(container)
         self.messagesLayout.addStretch()
         
-        print(f"📊 Total de mensagens no layout: {self.messagesLayout.count()}")  # DEBUG
-        
         # Scroll para baixo
         QTimer.singleShot(100, lambda: self.scrollToBottom())
     
@@ -758,17 +739,12 @@ class ChatInterface(QMainWindow):
         if not text:
             return
         
-        print(f"📤 Enviando: {text}")  # DEBUG
-        
         # Adicionar mensagem do usuário
         self.addMessage(text, is_user=True)
         self.inputField.clear()
         
-        print(f"✅ Mensagem adicionada ao chat")  # DEBUG
-        
         # Verificar se IA está configurada
         if not self.ai_engine:
-            print("❌ IA não configurada")  # DEBUG
             self.addMessage(
                 "❌ Engine da IA não está configurado.\n\n"
                 "Configure sua API Key do Gemini em:\n"
@@ -776,8 +752,6 @@ class ChatInterface(QMainWindow):
                 is_user=False
             )
             return
-        
-        print("🤖 Processando com IA...")  # DEBUG
         
         # Atualizar status
         self.setStatus("thinking", "Pensando...")
