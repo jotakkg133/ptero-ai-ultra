@@ -6,13 +6,14 @@ Interface moderna estilo macOS com blur, transparência e animações
 
 import sys
 import json
+import os
 from pathlib import Path
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QTextEdit, QLineEdit, QPushButton, QLabel, QScrollArea, QFrame,
     QGraphicsDropShadowEffect, QSplitter, QListWidget, QListWidgetItem
 )
-from PyQt6.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve, QPoint, QSize, pyqtSignal
+from PyQt6.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve, QPoint, QSize, pyqtSignal, QThread
 from PyQt6.QtGui import (
     QPalette, QColor, QLinearGradient, QPainter, QBrush, QPen,
     QFont, QIcon, QPainterPath, QPixmap
@@ -20,6 +21,13 @@ from PyQt6.QtGui import (
 from PyQt6.QtSvgWidgets import QSvgWidget
 import subprocess
 import threading
+
+# Importar o engine da IA
+try:
+    from ptero_ai_ultra_pro import PteroAIUltraPro
+except ImportError:
+    print("⚠️  Módulo ptero_ai_ultra_pro não encontrado")
+    PteroAIUltraPro = None
 
 
 class BlurredWidget(QWidget):
@@ -361,6 +369,23 @@ class TerminalDetector(QWidget):
             self.statusLabel.setText(f"❌ Erro: {e}")
 
 
+class AIWorker(QThread):
+    """Thread worker para processar IA em background"""
+    responseReady = pyqtSignal(str)
+    
+    def __init__(self, ai_engine, message):
+        super().__init__()
+        self.ai_engine = ai_engine
+        self.message = message
+    
+    def run(self):
+        try:
+            response = self.ai_engine.process_message(self.message)
+            self.responseReady.emit(response)
+        except Exception as e:
+            self.responseReady.emit(f"❌ Erro: {str(e)}")
+
+
 class ChatInterface(QMainWindow):
     """Interface principal de chat"""
     
@@ -368,8 +393,33 @@ class ChatInterface(QMainWindow):
         super().__init__()
         self.messages = []
         self.ai_status = "idle"
+        self.ai_engine = None
+        self.current_worker = None
+        
+        # Carregar config e inicializar IA
+        self.loadConfig()
         self.setupUI()
         self.applyStyles()
+    
+    def loadConfig(self):
+        """Carrega configuração e inicializa engine da IA"""
+        config_path = Path.home() / ".config" / "ptero-ai-ultra" / "config.json"
+        
+        if config_path.exists():
+            with open(config_path) as f:
+                config = json.load(f)
+                api_key = config.get("gemini_api_key", "")
+                
+                if api_key and PteroAIUltraPro:
+                    try:
+                        self.ai_engine = PteroAIUltraPro(api_key)
+                        print("✅ Engine da IA inicializado")
+                    except Exception as e:
+                        print(f"❌ Erro ao inicializar IA: {e}")
+                else:
+                    print("⚠️  API Key não configurada")
+        else:
+            print("⚠️  Arquivo de configuração não encontrado")
     
     def setupUI(self):
         self.setWindowTitle("PTERO-AI ULTRA PRO v2.0")
@@ -686,25 +736,29 @@ class ChatInterface(QMainWindow):
         self.addMessage(text, is_user=True)
         self.inputField.clear()
         
+        # Verificar se IA está configurada
+        if not self.ai_engine:
+            self.addMessage(
+                "❌ Engine da IA não está configurado.\n\n"
+                "Configure sua API Key do Gemini em:\n"
+                "~/.config/ptero-ai-ultra/config.json",
+                is_user=False
+            )
+            return
+        
         # Atualizar status
         self.setStatus("thinking", "Pensando...")
         
-        # Simular resposta da IA
-        QTimer.singleShot(2000, lambda: self.simulateAIResponse(text))
+        # Processar com IA em thread separada
+        self.current_worker = AIWorker(self.ai_engine, text)
+        self.current_worker.responseReady.connect(self.onAIResponse)
+        self.current_worker.start()
     
-    def simulateAIResponse(self, user_text):
-        """Simula resposta da IA"""
-        # Resposta baseada na entrada
-        if "arquivo" in user_text.lower():
-            response = "📖 Vou analisar o arquivo profundamente...\n\n✓ Entendimento: 95%\n✓ Zonas seguras identificadas\n✓ Plano de execução gerado\n\nPosso prosseguir?"
-            self.filesList.addItem("PluginCard.tsx (95%)")
-        elif "sim" in user_text.lower() or "pode" in user_text.lower():
-            response = "🚀 Executando mudanças...\n\n✓ Backup criado\n✓ Código aplicado em zona segura\n✓ Validação completa\n\nOperação concluída com sucesso!"
-        else:
-            response = f"🤖 Entendi! Você quer: {user_text}\n\nVou processar isso com cuidado máximo. Posso continuar?"
-        
+    def onAIResponse(self, response):
+        """Callback quando IA responde"""
         self.addMessage(response, is_user=False)
         self.setStatus("idle", "Pronto")
+        self.current_worker = None
     
     def setStatus(self, status, text):
         """Atualiza status"""
