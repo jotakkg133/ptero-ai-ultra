@@ -380,8 +380,21 @@ class AIWorker(QThread):
     
     def run(self):
         try:
-            response = self.ai_engine.process_message(self.message)
-            self.responseReady.emit(response)
+            # Capturar output da IA
+            import io
+            from contextlib import redirect_stdout, redirect_stderr
+            
+            output = io.StringIO()
+            with redirect_stdout(output), redirect_stderr(output):
+                self.ai_engine.process_request(self.message)
+            
+            result = output.getvalue()
+            
+            # Se não teve output, retornar mensagem padrão
+            if not result.strip():
+                result = "✅ Processado com sucesso!"
+            
+            self.responseReady.emit(result)
         except Exception as e:
             self.responseReady.emit(f"❌ Erro: {str(e)}")
 
@@ -412,14 +425,18 @@ class ChatInterface(QMainWindow):
                 
                 if api_key and PteroAIUltraPro:
                     try:
-                        self.ai_engine = PteroAIUltraPro(api_key)
-                        print("✅ Engine da IA inicializado")
+                        # Inicializar engine e analisar sistema
+                        self.ai_engine = PteroAIUltraPro(api_key, "ptero_ai_ultra_config.json")
+                        self.ai_engine.analyze_system()
+                        print("✅ Engine da IA inicializado e sistema analisado")
                     except Exception as e:
                         print(f"❌ Erro ao inicializar IA: {e}")
+                        import traceback
+                        traceback.print_exc()
                 else:
-                    print("⚠️  API Key não configurada")
+                    print("⚠️  API Key não configurada ou módulo não importado")
         else:
-            print("⚠️  Arquivo de configuração não encontrado")
+            print(f"⚠️  Arquivo de configuração não encontrado: {config_path}")
     
     def setupUI(self):
         self.setWindowTitle("PTERO-AI ULTRA PRO v2.0")
