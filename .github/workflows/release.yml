@@ -1,0 +1,82 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+    
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y dpkg-dev debhelper
+    
+    - name: Build .deb package
+      run: |
+        chmod +x build-deb.sh
+        ./build-deb.sh
+    
+    - name: Get version
+      id: version
+      run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+    
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref }}
+        release_name: PTERO-AI Ultra Pro ${{ github.ref }}
+        body: |
+          ## 🚀 PTERO-AI Ultra Pro ${{ steps.version.outputs.version }}
+          
+          ### 📦 Instalação
+          
+          **One-Liner (Recomendado)**
+          ```bash
+          curl -fsSL https://raw.githubusercontent.com/jotakkg133/ptero-ai-ultra/main/install.sh | sudo bash
+          ```
+          
+          **Pacote .deb**
+          ```bash
+          wget https://github.com/jotakkg133/ptero-ai-ultra/releases/download/v${{ steps.version.outputs.version }}/ptero-ai-ultra_${{ steps.version.outputs.version }}_amd64.deb
+          sudo dpkg -i ptero-ai-ultra_${{ steps.version.outputs.version }}_amd64.deb
+          sudo apt-get install -f
+          ```
+          
+          ### ✨ Novidades
+          
+          - Interface gráfica moderna estilo macOS
+          - Sistema de análise profunda de código
+          - 5 camadas de validação de segurança
+          - Detecção automática de terminal
+          - Chat interativo com IA
+          
+          ### 📖 Documentação
+          
+          [README completo](https://github.com/jotakkg133/ptero-ai-ultra#readme)
+        draft: false
+        prerelease: false
+    
+    - name: Upload .deb package
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./releases/ptero-ai-ultra_${{ steps.version.outputs.version }}_amd64.deb
+        asset_name: ptero-ai-ultra_${{ steps.version.outputs.version }}_amd64.deb
+        asset_content_type: application/vnd.debian.binary-package

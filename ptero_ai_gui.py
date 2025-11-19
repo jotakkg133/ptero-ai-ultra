@@ -1,0 +1,758 @@
+#!/usr/bin/env python3
+"""
+PTERO-AI ULTRA PRO v2.0 - Interface Gráfica
+Interface moderna estilo macOS com blur, transparência e animações
+"""
+
+import sys
+import json
+from pathlib import Path
+from PyQt6.QtWidgets import (
+    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
+    QTextEdit, QLineEdit, QPushButton, QLabel, QScrollArea, QFrame,
+    QGraphicsDropShadowEffect, QSplitter, QListWidget, QListWidgetItem
+)
+from PyQt6.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve, QPoint, QSize, pyqtSignal
+from PyQt6.QtGui import (
+    QPalette, QColor, QLinearGradient, QPainter, QBrush, QPen,
+    QFont, QIcon, QPainterPath, QPixmap
+)
+from PyQt6.QtSvgWidgets import QSvgWidget
+import subprocess
+import threading
+
+
+class BlurredWidget(QWidget):
+    """Widget com efeito blur e transparência"""
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setAutoFillBackground(False)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+    
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        
+        # Fundo com blur
+        path = QPainterPath()
+        path.addRoundedRect(0, 0, self.width(), self.height(), 20, 20)
+        
+        # Gradiente de fundo
+        gradient = QLinearGradient(0, 0, 0, self.height())
+        gradient.setColorAt(0, QColor(30, 30, 46, 230))  # Quase transparente
+        gradient.setColorAt(1, QColor(17, 17, 27, 240))
+        
+        painter.fillPath(path, QBrush(gradient))
+        
+        # Borda brilhante
+        pen = QPen(QColor(94, 129, 172, 100))
+        pen.setWidth(1)
+        painter.setPen(pen)
+        painter.drawPath(path)
+
+
+class MessageBubble(QFrame):
+    """Balão de mensagem estilo chat"""
+    
+    def __init__(self, text, is_user=True, parent=None):
+        super().__init__(parent)
+        self.is_user = is_user
+        self.setText(text)
+        self.setupUI()
+    
+    def setupUI(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(15, 10, 15, 10)
+        
+        # Label do texto
+        self.label = QLabel(self.text())
+        self.label.setWordWrap(True)
+        self.label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        
+        # Estilo baseado em quem enviou
+        if self.is_user:
+            # Usuário - azul
+            self.setStyleSheet("""
+                QFrame {
+                    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                        stop:0 rgba(137, 180, 250, 220),
+                        stop:1 rgba(116, 199, 236, 220));
+                    border-radius: 18px;
+                    border: 1px solid rgba(255, 255, 255, 50);
+                }
+            """)
+            self.label.setStyleSheet("""
+                color: #1e1e2e;
+                font-size: 14px;
+                font-weight: 500;
+            """)
+        else:
+            # IA - cinza escuro
+            self.setStyleSheet("""
+                QFrame {
+                    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                        stop:0 rgba(49, 50, 68, 220),
+                        stop:1 rgba(30, 30, 46, 230));
+                    border-radius: 18px;
+                    border: 1px solid rgba(148, 226, 213, 50);
+                }
+            """)
+            self.label.setStyleSheet("""
+                color: #cdd6f4;
+                font-size: 14px;
+                font-weight: 400;
+            """)
+        
+        # Sombra
+        shadow = QGraphicsDropShadowEffect()
+        shadow.setBlurRadius(20)
+        shadow.setColor(QColor(0, 0, 0, 100))
+        shadow.setOffset(0, 4)
+        self.setGraphicsEffect(shadow)
+        
+        layout.addWidget(self.label)
+        
+        # Animação de entrada
+        self.animateEntry()
+    
+    def setText(self, text):
+        self._text = text
+        if hasattr(self, 'label'):
+            self.label.setText(text)
+    
+    def text(self):
+        return self._text
+    
+    def animateEntry(self):
+        """Animação suave de entrada"""
+        self.setMaximumHeight(0)
+        animation = QPropertyAnimation(self, b"maximumHeight")
+        animation.setDuration(300)
+        animation.setStartValue(0)
+        animation.setEndValue(1000)
+        animation.setEasingCurve(QEasingCurve.Type.OutCubic)
+        animation.start()
+
+
+class AnimatedLogo(QWidget):
+    """Logo SVG animado"""
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedSize(60, 60)
+        self.rotation = 0
+        self.pulse_scale = 1.0
+        
+        # Timer para animação
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.animate)
+        self.timer.start(50)
+    
+    def animate(self):
+        self.rotation += 2
+        self.pulse_scale = 1.0 + 0.1 * abs(((self.rotation % 60) - 30) / 30)
+        self.update()
+    
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        
+        # Centro
+        center = self.rect().center()
+        painter.translate(center)
+        painter.rotate(self.rotation)
+        painter.scale(self.pulse_scale, self.pulse_scale)
+        
+        # Círculo externo (azul brilhante)
+        gradient = QLinearGradient(-25, -25, 25, 25)
+        gradient.setColorAt(0, QColor(137, 180, 250))
+        gradient.setColorAt(1, QColor(116, 199, 236))
+        
+        painter.setBrush(QBrush(gradient))
+        painter.setPen(QPen(QColor(255, 255, 255, 100), 2))
+        painter.drawEllipse(-25, -25, 50, 50)
+        
+        # Círculo interno (roxo)
+        gradient2 = QLinearGradient(-15, -15, 15, 15)
+        gradient2.setColorAt(0, QColor(203, 166, 247))
+        gradient2.setColorAt(1, QColor(180, 190, 254))
+        
+        painter.setBrush(QBrush(gradient2))
+        painter.drawEllipse(-15, -15, 30, 30)
+        
+        # Ponto central (branco)
+        painter.setBrush(QBrush(QColor(255, 255, 255)))
+        painter.drawEllipse(-5, -5, 10, 10)
+
+
+class StatusIndicator(QWidget):
+    """Indicador de status animado"""
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedSize(12, 12)
+        self.status = "idle"  # idle, thinking, working
+        self.opacity = 1.0
+        self.direction = -1
+        
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.animate)
+        self.timer.start(30)
+    
+    def setStatus(self, status):
+        self.status = status
+    
+    def animate(self):
+        if self.status == "thinking":
+            self.opacity += 0.05 * self.direction
+            if self.opacity <= 0.3 or self.opacity >= 1.0:
+                self.direction *= -1
+        else:
+            self.opacity = 1.0
+        
+        self.update()
+    
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        
+        # Cor baseada no status
+        if self.status == "idle":
+            color = QColor(166, 227, 161)  # Verde
+        elif self.status == "thinking":
+            color = QColor(249, 226, 175)  # Amarelo
+        elif self.status == "working":
+            color = QColor(137, 180, 250)  # Azul
+        else:
+            color = QColor(243, 139, 168)  # Vermelho
+        
+        color.setAlpha(int(self.opacity * 255))
+        
+        painter.setBrush(QBrush(color))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.drawEllipse(0, 0, 12, 12)
+        
+        # Brilho
+        gradient = QLinearGradient(0, 0, 12, 12)
+        gradient.setColorAt(0, QColor(255, 255, 255, 50))
+        gradient.setColorAt(1, QColor(255, 255, 255, 0))
+        painter.setBrush(QBrush(gradient))
+        painter.drawEllipse(0, 0, 12, 12)
+
+
+class TerminalDetector(QWidget):
+    """Widget para detectar terminal ativo"""
+    
+    terminalDetected = pyqtSignal(str)
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setupUI()
+        self.monitoring = False
+    
+    def setupUI(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 15, 20, 15)
+        
+        # Título
+        title = QLabel("🖥️ Detecção de Terminal")
+        title.setStyleSheet("""
+            color: #cdd6f4;
+            font-size: 16px;
+            font-weight: 600;
+        """)
+        layout.addWidget(title)
+        
+        # Instrução
+        instruction = QLabel("Digite algo no terminal que deseja controlar...")
+        instruction.setStyleSheet("""
+            color: #a6adc8;
+            font-size: 13px;
+            margin-top: 5px;
+        """)
+        layout.addWidget(instruction)
+        
+        # Status
+        self.statusLabel = QLabel("⏳ Aguardando atividade no terminal...")
+        self.statusLabel.setStyleSheet("""
+            color: #f9e2af;
+            font-size: 13px;
+            margin-top: 10px;
+            padding: 10px;
+            background: rgba(249, 226, 175, 20);
+            border-radius: 8px;
+        """)
+        layout.addWidget(self.statusLabel)
+        
+        # Botão iniciar
+        self.startBtn = QPushButton("▶ Iniciar Detecção")
+        self.startBtn.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 rgba(166, 227, 161, 220),
+                    stop:1 rgba(148, 226, 213, 220));
+                color: #1e1e2e;
+                border: none;
+                border-radius: 10px;
+                padding: 12px;
+                font-size: 14px;
+                font-weight: 600;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 rgba(166, 227, 161, 255),
+                    stop:1 rgba(148, 226, 213, 255));
+            }
+        """)
+        self.startBtn.clicked.connect(self.toggleMonitoring)
+        layout.addWidget(self.startBtn)
+    
+    def toggleMonitoring(self):
+        if not self.monitoring:
+            self.monitoring = True
+            self.startBtn.setText("⏸ Parar Detecção")
+            self.statusLabel.setText("👀 Monitorando terminais ativos...")
+            self.statusLabel.setStyleSheet("""
+                color: #89b4fa;
+                font-size: 13px;
+                margin-top: 10px;
+                padding: 10px;
+                background: rgba(137, 180, 250, 20);
+                border-radius: 8px;
+            """)
+            # Iniciar thread de monitoramento
+            threading.Thread(target=self.monitorTerminals, daemon=True).start()
+        else:
+            self.monitoring = False
+            self.startBtn.setText("▶ Iniciar Detecção")
+            self.statusLabel.setText("⏳ Aguardando atividade no terminal...")
+    
+    def monitorTerminals(self):
+        """Monitora terminais ativos"""
+        try:
+            # Listar processos de terminal
+            result = subprocess.run(
+                ['ps', 'aux'], 
+                capture_output=True, 
+                text=True
+            )
+            
+            terminal_processes = []
+            for line in result.stdout.split('\n'):
+                if any(term in line.lower() for term in ['bash', 'zsh', 'fish', 'pts']):
+                    terminal_processes.append(line)
+            
+            if terminal_processes:
+                # Pegar primeiro terminal encontrado
+                first_terminal = terminal_processes[0]
+                self.terminalDetected.emit(first_terminal)
+                
+                self.statusLabel.setText(f"✓ Terminal detectado!")
+                self.statusLabel.setStyleSheet("""
+                    color: #a6e3a1;
+                    font-size: 13px;
+                    margin-top: 10px;
+                    padding: 10px;
+                    background: rgba(166, 227, 161, 20);
+                    border-radius: 8px;
+                """)
+        except Exception as e:
+            self.statusLabel.setText(f"❌ Erro: {e}")
+
+
+class ChatInterface(QMainWindow):
+    """Interface principal de chat"""
+    
+    def __init__(self):
+        super().__init__()
+        self.messages = []
+        self.ai_status = "idle"
+        self.setupUI()
+        self.applyStyles()
+    
+    def setupUI(self):
+        self.setWindowTitle("PTERO-AI ULTRA PRO v2.0")
+        self.setGeometry(100, 100, 1200, 800)
+        
+        # Widget central
+        central = QWidget()
+        self.setCentralWidget(central)
+        
+        # Layout principal
+        main_layout = QHBoxLayout(central)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+        
+        # Splitter para dividir tela
+        splitter = QSplitter(Qt.Orientation.Horizontal)
+        
+        # === PAINEL ESQUERDO (Sidebar) ===
+        sidebar = self.createSidebar()
+        splitter.addWidget(sidebar)
+        
+        # === PAINEL CENTRAL (Chat) ===
+        chat_panel = self.createChatPanel()
+        splitter.addWidget(chat_panel)
+        
+        # === PAINEL DIREITO (Info) ===
+        info_panel = self.createInfoPanel()
+        splitter.addWidget(info_panel)
+        
+        # Proporções
+        splitter.setSizes([250, 650, 300])
+        
+        main_layout.addWidget(splitter)
+    
+    def createSidebar(self):
+        """Cria barra lateral"""
+        sidebar = BlurredWidget()
+        layout = QVBoxLayout(sidebar)
+        layout.setContentsMargins(15, 20, 15, 20)
+        layout.setSpacing(15)
+        
+        # Logo animado
+        logo_container = QWidget()
+        logo_layout = QHBoxLayout(logo_container)
+        logo_layout.setContentsMargins(0, 0, 0, 0)
+        logo = AnimatedLogo()
+        logo_layout.addStretch()
+        logo_layout.addWidget(logo)
+        logo_layout.addStretch()
+        layout.addWidget(logo_container)
+        
+        # Título
+        title = QLabel("PTERO-AI")
+        title.setStyleSheet("""
+            color: #cdd6f4;
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 5px;
+        """)
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(title)
+        
+        subtitle = QLabel("Ultra Pro v2.0")
+        subtitle.setStyleSheet("""
+            color: #a6adc8;
+            font-size: 12px;
+            margin-bottom: 20px;
+        """)
+        subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(subtitle)
+        
+        # Status
+        status_container = QWidget()
+        status_layout = QHBoxLayout(status_container)
+        status_layout.setContentsMargins(10, 8, 10, 8)
+        
+        self.statusIndicator = StatusIndicator()
+        status_layout.addWidget(self.statusIndicator)
+        
+        self.statusText = QLabel("Pronto")
+        self.statusText.setStyleSheet("""
+            color: #a6e3a1;
+            font-size: 13px;
+            font-weight: 500;
+        """)
+        status_layout.addWidget(self.statusText)
+        status_layout.addStretch()
+        
+        layout.addWidget(status_container)
+        
+        # Separador
+        separator = QFrame()
+        separator.setFrameShape(QFrame.Shape.HLine)
+        separator.setStyleSheet("background: rgba(148, 226, 213, 30);")
+        layout.addWidget(separator)
+        
+        # Detector de terminal
+        self.terminalDetector = TerminalDetector()
+        self.terminalDetector.terminalDetected.connect(self.onTerminalDetected)
+        layout.addWidget(self.terminalDetector)
+        
+        layout.addStretch()
+        
+        # Informações
+        info_label = QLabel("💡 Dica: Digite no terminal\npara eu identificar qual\ncomando você quer\nque eu execute!")
+        info_label.setStyleSheet("""
+            color: #a6adc8;
+            font-size: 11px;
+            padding: 10px;
+            background: rgba(137, 180, 250, 15);
+            border-radius: 8px;
+        """)
+        info_label.setWordWrap(True)
+        layout.addWidget(info_label)
+        
+        return sidebar
+    
+    def createChatPanel(self):
+        """Cria painel de chat"""
+        panel = BlurredWidget()
+        layout = QVBoxLayout(panel)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(15)
+        
+        # Área de mensagens
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("""
+            QScrollArea {
+                background: transparent;
+                border: none;
+            }
+            QScrollBar:vertical {
+                background: rgba(69, 71, 90, 100);
+                width: 8px;
+                border-radius: 4px;
+            }
+            QScrollBar::handle:vertical {
+                background: rgba(137, 180, 250, 150);
+                border-radius: 4px;
+            }
+        """)
+        
+        self.messagesWidget = QWidget()
+        self.messagesLayout = QVBoxLayout(self.messagesWidget)
+        self.messagesLayout.setContentsMargins(0, 0, 10, 0)
+        self.messagesLayout.setSpacing(12)
+        self.messagesLayout.addStretch()
+        
+        scroll.setWidget(self.messagesWidget)
+        layout.addWidget(scroll, 1)
+        
+        # Área de input
+        input_container = QWidget()
+        input_layout = QHBoxLayout(input_container)
+        input_layout.setContentsMargins(0, 0, 0, 0)
+        input_layout.setSpacing(10)
+        
+        self.inputField = QLineEdit()
+        self.inputField.setPlaceholderText("Digite sua mensagem...")
+        self.inputField.setStyleSheet("""
+            QLineEdit {
+                background: rgba(49, 50, 68, 200);
+                border: 1px solid rgba(148, 226, 213, 50);
+                border-radius: 20px;
+                padding: 12px 20px;
+                color: #cdd6f4;
+                font-size: 14px;
+            }
+            QLineEdit:focus {
+                border: 1px solid rgba(137, 180, 250, 150);
+            }
+        """)
+        self.inputField.returnPressed.connect(self.sendMessage)
+        input_layout.addWidget(self.inputField)
+        
+        sendBtn = QPushButton("Enviar")
+        sendBtn.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 rgba(137, 180, 250, 220),
+                    stop:1 rgba(116, 199, 236, 220));
+                border: none;
+                border-radius: 20px;
+                padding: 12px 25px;
+                color: #1e1e2e;
+                font-size: 14px;
+                font-weight: 600;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 rgba(137, 180, 250, 255),
+                    stop:1 rgba(116, 199, 236, 255));
+            }
+        """)
+        sendBtn.clicked.connect(self.sendMessage)
+        input_layout.addWidget(sendBtn)
+        
+        layout.addWidget(input_container)
+        
+        return panel
+    
+    def createInfoPanel(self):
+        """Cria painel de informações"""
+        panel = BlurredWidget()
+        layout = QVBoxLayout(panel)
+        layout.setContentsMargins(15, 20, 15, 20)
+        layout.setSpacing(15)
+        
+        # Título
+        title = QLabel("📊 Informações")
+        title.setStyleSheet("""
+            color: #cdd6f4;
+            font-size: 16px;
+            font-weight: 600;
+        """)
+        layout.addWidget(title)
+        
+        # Sistema
+        system_label = QLabel("🖥️ Sistema")
+        system_label.setStyleSheet("color: #a6adc8; font-size: 13px; margin-top: 10px;")
+        layout.addWidget(system_label)
+        
+        self.systemInfo = QLabel("Ubuntu 22.04\nPterodactyl instalado")
+        self.systemInfo.setStyleSheet("""
+            color: #cdd6f4;
+            font-size: 12px;
+            padding: 10px;
+            background: rgba(49, 50, 68, 150);
+            border-radius: 8px;
+            margin-bottom: 15px;
+        """)
+        layout.addWidget(self.systemInfo)
+        
+        # Arquivos analisados
+        files_label = QLabel("📁 Arquivos Analisados")
+        files_label.setStyleSheet("color: #a6adc8; font-size: 13px;")
+        layout.addWidget(files_label)
+        
+        self.filesList = QListWidget()
+        self.filesList.setStyleSheet("""
+            QListWidget {
+                background: rgba(49, 50, 68, 150);
+                border: 1px solid rgba(148, 226, 213, 30);
+                border-radius: 8px;
+                color: #cdd6f4;
+                font-size: 12px;
+                padding: 5px;
+            }
+            QListWidget::item {
+                padding: 8px;
+                border-radius: 5px;
+            }
+            QListWidget::item:hover {
+                background: rgba(137, 180, 250, 50);
+            }
+        """)
+        layout.addWidget(self.filesList)
+        
+        layout.addStretch()
+        
+        return panel
+    
+    def applyStyles(self):
+        """Aplica estilos globais"""
+        self.setStyleSheet("""
+            QMainWindow {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                    stop:0 rgba(17, 17, 27, 255),
+                    stop:1 rgba(30, 30, 46, 255));
+            }
+        """)
+    
+    def addMessage(self, text, is_user=True):
+        """Adiciona mensagem ao chat"""
+        bubble = MessageBubble(text, is_user)
+        
+        # Container para alinhamento
+        container = QWidget()
+        container_layout = QHBoxLayout(container)
+        container_layout.setContentsMargins(0, 0, 0, 0)
+        
+        if is_user:
+            container_layout.addStretch()
+            container_layout.addWidget(bubble, 0, Qt.AlignmentFlag.AlignRight)
+        else:
+            container_layout.addWidget(bubble, 0, Qt.AlignmentFlag.AlignLeft)
+            container_layout.addStretch()
+        
+        # Remove stretch temporário
+        item = self.messagesLayout.takeAt(self.messagesLayout.count() - 1)
+        
+        self.messagesLayout.addWidget(container)
+        self.messagesLayout.addStretch()
+        
+        # Scroll para baixo
+        QTimer.singleShot(100, lambda: self.scrollToBottom())
+    
+    def scrollToBottom(self):
+        """Scroll automático para última mensagem"""
+        scroll_area = self.messagesWidget.parent()
+        if hasattr(scroll_area, 'verticalScrollBar'):
+            scroll_area.verticalScrollBar().setValue(
+                scroll_area.verticalScrollBar().maximum()
+            )
+    
+    def sendMessage(self):
+        """Envia mensagem"""
+        text = self.inputField.text().strip()
+        if not text:
+            return
+        
+        # Adicionar mensagem do usuário
+        self.addMessage(text, is_user=True)
+        self.inputField.clear()
+        
+        # Atualizar status
+        self.setStatus("thinking", "Pensando...")
+        
+        # Simular resposta da IA
+        QTimer.singleShot(2000, lambda: self.simulateAIResponse(text))
+    
+    def simulateAIResponse(self, user_text):
+        """Simula resposta da IA"""
+        # Resposta baseada na entrada
+        if "arquivo" in user_text.lower():
+            response = "📖 Vou analisar o arquivo profundamente...\n\n✓ Entendimento: 95%\n✓ Zonas seguras identificadas\n✓ Plano de execução gerado\n\nPosso prosseguir?"
+            self.filesList.addItem("PluginCard.tsx (95%)")
+        elif "sim" in user_text.lower() or "pode" in user_text.lower():
+            response = "🚀 Executando mudanças...\n\n✓ Backup criado\n✓ Código aplicado em zona segura\n✓ Validação completa\n\nOperação concluída com sucesso!"
+        else:
+            response = f"🤖 Entendi! Você quer: {user_text}\n\nVou processar isso com cuidado máximo. Posso continuar?"
+        
+        self.addMessage(response, is_user=False)
+        self.setStatus("idle", "Pronto")
+    
+    def setStatus(self, status, text):
+        """Atualiza status"""
+        self.ai_status = status
+        self.statusIndicator.setStatus(status)
+        self.statusText.setText(text)
+        
+        # Cor do texto baseado no status
+        colors = {
+            "idle": "#a6e3a1",
+            "thinking": "#f9e2af",
+            "working": "#89b4fa",
+            "error": "#f38ba8"
+        }
+        self.statusText.setStyleSheet(f"""
+            color: {colors.get(status, '#cdd6f4')};
+            font-size: 13px;
+            font-weight: 500;
+        """)
+    
+    def onTerminalDetected(self, terminal_info):
+        """Callback quando terminal é detectado"""
+        self.addMessage(f"✅ Terminal detectado!\n\n{terminal_info}\n\nAgora posso executar comandos neste terminal.", is_user=False)
+        self.setStatus("idle", "Terminal conectado")
+
+
+def main():
+    app = QApplication(sys.argv)
+    
+    # Fonte personalizada
+    font = QFont("SF Pro Display", 13)
+    app.setFont(font)
+    
+    # Criar e mostrar janela
+    window = ChatInterface()
+    window.show()
+    
+    # Mensagem de boas-vindas
+    QTimer.singleShot(500, lambda: window.addMessage(
+        "👋 Olá! Sou a PTERO-AI Ultra Pro.\n\n"
+        "Vou te ajudar a gerenciar seu Pterodactyl com segurança máxima.\n\n"
+        "Digite algo no terminal que você quer que eu controle, "
+        "ou simplesmente converse comigo!", 
+        is_user=False
+    ))
+    
+    sys.exit(app.exec())
+
+
+if __name__ == "__main__":
+    main()
